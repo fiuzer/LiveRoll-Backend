@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     github_auth_redirect_uri: str = 'http://localhost:8000/auth/github/callback'
 
     cors_origins: str = 'http://localhost:8000'
+    public_frontend_url: str = 'http://localhost:5173'
     overlay_token_ttl_seconds: int = 60 * 60 * 24 * 365
 
     default_command: str = '!participar'

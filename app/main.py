@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
 
     templates = Jinja2Templates(directory='app/templates')
     templates.env.filters['br_datetime'] = format_brt_datetime
+    templates.env.globals['public_frontend_url'] = settings.public_frontend_url
     app.state.templates = templates
 
     async def overlay_loader(giveaway_id: int, token: str):

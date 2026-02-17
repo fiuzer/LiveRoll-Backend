@@ -136,7 +136,7 @@
 <body>
   <main class="max-w-6xl mx-auto py-8 px-4">
     <div class="flex items-center justify-between mb-4">
-      <a href="/dashboard" class="inline-flex items-center gap-2" aria-label="LiveRoll">
+      <a href="{% if request.session.get('user_id') %}/dashboard{% else %}{{ public_frontend_url }}{% endif %}" class="inline-flex items-center gap-2" aria-label="LiveRoll">
         <img src="/static/liveroll-logo.svg" alt="LiveRoll" class="h-10 md:h-11 w-auto">
       </a>
       <button id="theme-toggle" class="btn-soft text-sm" type="button" aria-label="Alternar tema" title="Alternar tema">☀️</button>
