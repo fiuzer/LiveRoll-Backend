@@ -1,0 +1,298 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overlay da Roleta</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-a: rgba(15, 23, 42, 0.88);
+      --bg-b: rgba(3, 105, 161, 0.78);
+      --line: rgba(255, 255, 255, 0.16);
+    }
+    body {
+      margin: 0;
+      font-family: 'Sora', sans-serif;
+      background: transparent;
+      overflow: hidden;
+    }
+    .overlay-shell {
+      width: min(1400px, 98vw);
+      border-radius: 28px;
+      border: 1px solid var(--line);
+      background: linear-gradient(125deg, var(--bg-a), var(--bg-b));
+      backdrop-filter: blur(8px);
+      color: #fff;
+      box-shadow: 0 24px 48px rgba(2, 6, 23, 0.36);
+      padding: 18px;
+    }
+    .roulette-window {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.18);
+      height: 76px;
+    }
+    .roulette-track {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      will-change: transform;
+      padding: 0 8px;
+    }
+    .name-chip {
+      white-space: nowrap;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.11);
+      padding: 7px 14px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .marker {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 11px solid transparent;
+      border-right: 11px solid transparent;
+      border-top: 16px solid #facc15;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,.35));
+      z-index: 4;
+    }
+    .winner-box {
+      border-radius: 14px;
+      border: 1px solid rgba(250, 204, 21, 0.34);
+      background: rgba(250, 204, 21, 0.13);
+      padding: 10px 12px;
+    }
+    .winner-pop { animation: pop .55s ease; }
+    @keyframes pop {
+      0% { transform: scale(.95); opacity: .6; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="w-full h-screen flex items-end justify-center p-4 md:p-8">
+    <section class="overlay-shell">
+      <header class="flex items-center justify-between gap-3 mb-3">
+        <h1 id="ov-name" class="text-xl md:text-2xl font-extrabold">Roleta</h1>
+        <div class="flex items-center gap-2">
+          <span id="ov-status" class="text-xs md:text-sm px-3 py-1 rounded-full bg-red-500">Fechado</span>
+          <span class="text-xs md:text-sm rounded-full px-3 py-1 bg-white/10">Comando: <strong id="ov-command">!participar</strong></span>
+        </div>
+      </header>
+
+      <div class="grid md:grid-cols-3 gap-3 mb-3">
+        <div class="rounded-xl bg-white/10 p-3">
+          <p class="text-[11px] uppercase tracking-wide opacity-80">Participantes</p>
+          <p id="ov-count" class="text-3xl md:text-4xl font-extrabold">0</p>
+        </div>
+        <div id="ov-winner-box" class="winner-box md:col-span-2">
+          <p class="text-[11px] uppercase tracking-wide opacity-80">Vencedor</p>
+          <p id="ov-winner" class="text-xl md:text-2xl font-extrabold">Aguardando sorteio...</p>
+        </div>
+      </div>
+
+      <div class="roulette-window" id="roulette-window">
+        <div class="marker"></div>
+        <div class="roulette-track" id="roulette-track"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const giveawayId = {{ giveaway_id }};
+    const token = "{{ token }}";
+
+    const elTrack = document.getElementById('roulette-track');
+    const elWindow = document.getElementById('roulette-window');
+    const elWinner = document.getElementById('ov-winner');
+    const elWinnerBox = document.getElementById('ov-winner-box');
+
+    let names = [];
+    let namesKey = '';
+    let cycleWidth = 1;
+    let offset = 0;
+    let speed = 18;
+    let phase = 'idle'; // idle | spinning | resolving
+    let lastTs = performance.now();
+    let resolveAnim = null;
+    let winnerKey = null;
+
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+    const fallbackNames = () => ['Aguardando', 'Participantes', 'da live'];
+
+    function renderTrack(list) {
+      const safe = (list.length ? list : fallbackNames()).slice(0, 600);
+      names = safe;
+      namesKey = safe.join('|');
+
+      const cycle = safe
+        .map((name, idx) => `<span class="name-chip" data-idx="${idx}">${name}</span>`)
+        .join('');
+
+      // Build multiple cycles to allow long movement without visual gaps.
+      elTrack.innerHTML = Array.from({ length: 8 }, () => cycle).join('');
+
+      requestAnimationFrame(() => {
+        const firstChip = elTrack.querySelector('[data-idx]');
+        if (!firstChip) {
+          cycleWidth = 1;
+          return;
+        }
+        let oneCycle = 0;
+        for (let i = 0; i < safe.length; i++) {
+          const chip = elTrack.querySelector(`[data-idx="${i}"]`);
+          if (!chip) continue;
+          oneCycle = Math.max(oneCycle, chip.offsetLeft + chip.offsetWidth);
+        }
+        cycleWidth = Math.max(oneCycle + 12, 1);
+        offset = ((offset % cycleWidth) + cycleWidth) % cycleWidth;
+      });
+    }
+
+    function setBaseState(data) {
+      document.getElementById('ov-name').textContent = data.name || 'Roleta';
+      document.getElementById('ov-count').textContent = String(data.participants_count || 0);
+      document.getElementById('ov-command').textContent = data.command || '!participar';
+
+      const status = document.getElementById('ov-status');
+      const open = Boolean(data.is_open);
+      status.textContent = open ? 'Aberto' : 'Fechado';
+      status.className = open
+        ? 'text-xs md:text-sm px-3 py-1 rounded-full bg-emerald-500'
+        : 'text-xs md:text-sm px-3 py-1 rounded-full bg-red-500';
+
+      const incomingNames = Array.isArray(data.participant_names) ? data.participant_names : [];
+      const incomingKey = incomingNames.join('|');
+      if (incomingKey !== namesKey) {
+        renderTrack(incomingNames);
+      }
+    }
+
+    function startSpinPhase() {
+      if (phase === 'resolving') return;
+      phase = 'spinning';
+      speed = Math.max(speed, 280);
+    }
+
+    function resolveToWinner(winnerName) {
+      if (!winnerName || !names.length) return;
+
+      let winnerIdx = names.findIndex((n) => n === winnerName);
+      if (winnerIdx < 0) {
+        names.push(winnerName);
+        renderTrack(names);
+        winnerIdx = names.length - 1;
+      }
+
+      const chip = elTrack.querySelector(`[data-idx="${winnerIdx}"]`);
+      if (!chip || cycleWidth <= 1) {
+        elWinner.textContent = winnerName;
+        return;
+      }
+
+      const chipCenter = chip.offsetLeft + chip.offsetWidth / 2;
+      const markerX = elWindow.clientWidth / 2;
+      const currentMarkerGlobal = offset + markerX;
+
+      let targetGlobal = chipCenter;
+      while (targetGlobal < currentMarkerGlobal + cycleWidth * 2.3) {
+        targetGlobal += cycleWidth;
+      }
+      const targetOffset = targetGlobal - markerX;
+
+      phase = 'resolving';
+      resolveAnim = {
+        startOffset: offset,
+        targetOffset,
+        startTs: performance.now(),
+        durationMs: 2600,
+      };
+
+      elWinner.textContent = `Sorteando ${winnerName}...`;
+    }
+
+    function onWinner(data) {
+      const w = data.last_winner;
+      if (!w || !w.display_name) return;
+      const key = `${w.display_name}|${w.platform}|${w.drawn_at || ''}`;
+      if (key === winnerKey) return;
+      winnerKey = key;
+
+      if (phase !== 'spinning') {
+        startSpinPhase();
+      }
+      resolveToWinner(w.display_name);
+    }
+
+    function loop(ts) {
+      const dt = Math.min((ts - lastTs) / 1000, 0.05);
+      lastTs = ts;
+
+      if (phase === 'spinning') {
+        speed = Math.min(speed + 220 * dt, 420);
+        offset += speed * dt;
+      } else if (phase === 'resolving' && resolveAnim) {
+        const t = Math.min((ts - resolveAnim.startTs) / resolveAnim.durationMs, 1);
+        const eased = easeOutCubic(t);
+        offset = resolveAnim.startOffset + (resolveAnim.targetOffset - resolveAnim.startOffset) * eased;
+
+        if (t >= 1) {
+          phase = 'idle';
+          speed = 20;
+          resolveAnim = null;
+          const winnerName = (winnerKey || '').split('|')[0] || 'Vencedor';
+          elWinner.textContent = winnerName;
+          elWinnerBox.classList.remove('winner-pop');
+          void elWinnerBox.offsetWidth;
+          elWinnerBox.classList.add('winner-pop');
+        }
+      } else {
+        speed = 18;
+        offset += speed * dt;
+      }
+
+      if (cycleWidth > 1 && phase !== 'resolving') {
+        offset = ((offset % cycleWidth) + cycleWidth) % cycleWidth;
+      }
+
+      elTrack.style.transform = `translate(${-offset}px, -50%)`;
+      requestAnimationFrame(loop);
+    }
+
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${scheme}://${location.host}/ws/overlay/${giveawayId}?token=${encodeURIComponent(token)}`);
+
+    ws.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      if (payload.type === 'draw_started') {
+        startSpinPhase();
+        return;
+      }
+
+      const data = payload.type === 'state' ? payload.state : payload;
+      if (!data) return;
+      setBaseState(data);
+      onWinner(data);
+    };
+
+    renderTrack([]);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

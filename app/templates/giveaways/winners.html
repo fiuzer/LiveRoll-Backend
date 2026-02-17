@@ -1,0 +1,23 @@
+﻿{% extends 'base.html' %}
+{% block content %}
+<section class="glass soft-shadow rounded-3xl p-5 md:p-6 mb-5">
+  <div class="flex items-center justify-between gap-3 mb-3">
+    <h1 class="title-font text-2xl md:text-3xl font-extrabold">Histórico completo de vencedores</h1>
+    <a href="/giveaways/{{ giveaway.id }}" class="btn-soft">Voltar ao sorteio</a>
+  </div>
+  <p class="text-slate-600">Sorteio: <strong>{{ giveaway.name }}</strong></p>
+</section>
+
+<section class="glass soft-shadow rounded-2xl p-4">
+  <ul class="space-y-2 max-h-[70vh] overflow-auto pr-1">
+    {% for w in winners %}
+    <li class="rounded-xl border border-slate-200 bg-white p-3 text-sm flex items-center justify-between gap-2">
+      <span><strong>{{ w.display_name }}</strong> <span class="text-slate-500">({{ w.platform.value }})</span></span>
+      <span class="text-xs text-slate-500">{{ w.drawn_at|br_datetime }}</span>
+    </li>
+    {% else %}
+    <li class="text-slate-600">Nenhum vencedor registrado ainda.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

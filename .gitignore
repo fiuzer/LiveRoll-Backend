@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Local DB/volumes
+pg_data/
+*.sqlite3
+
+# Logs
+*.log
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Certificados/chaves
+*.pem
+*.key
+*.crt
+cloudflared.yml
+.config/cloudflared/
+
+# Misc secrets/config locais
+secrets/
+*.secret
+
+# Alembic temp
+alembic/versions/__pycache__/

@@ -1,0 +1,151 @@
+﻿{% extends 'base.html' %}
+{% block content %}
+<section class="glass soft-shadow rounded-3xl p-5 md:p-6 mb-5">
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <a href="/dashboard" class="btn-soft">Voltar ao painel</a>
+    <div class="flex items-center gap-2">
+      {% if giveaway.is_open %}
+      <span id="status-pill" class="chip bg-emerald-100 text-emerald-700">SORTEIO ABERTO</span>
+      {% else %}
+      <span id="status-pill" class="chip bg-slate-200 text-slate-700">SORTEIO FECHADO</span>
+      {% endif %}
+      <span class="chip bg-sky-100 text-sky-700">ID #{{ giveaway.id }}</span>
+    </div>
+  </div>
+
+  <h1 class="title-font text-3xl md:text-4xl font-extrabold">{{ giveaway.name }}</h1>
+  <p class="text-slate-600 mt-1">Comando ativo: <strong id="command">{{ giveaway.command }}</strong></p>
+
+  {% if warning %}
+  <div class="mt-4 rounded-xl border border-yellow-300 bg-yellow-50 text-yellow-800 p-3">{{ warning }}</div>
+  {% endif %}
+
+  <div class="grid md:grid-cols-4 gap-3 mt-5">
+    <article class="rounded-2xl bg-white border border-slate-200 p-4">
+      <p class="text-xs text-slate-500 uppercase tracking-wide">Participantes</p>
+      <p id="participants-count" class="title-font text-4xl font-extrabold mt-1">{{ participants_count }}</p>
+    </article>
+    <article class="rounded-2xl bg-white border border-slate-200 p-4">
+      <p class="text-xs text-slate-500 uppercase tracking-wide">Status</p>
+      <p id="status-text" class="title-font text-xl font-bold mt-2">{% if giveaway.is_open %}Aberto{% else %}Fechado{% endif %}</p>
+    </article>
+    <article id="winner-card" class="rounded-2xl bg-white border border-slate-200 p-4 md:col-span-2">
+      <p class="text-xs text-slate-500 uppercase tracking-wide">Último vencedor</p>
+      <p id="last-winner" class="title-font text-2xl font-extrabold mt-2">{% if winners and winners[0] %}{{ winners[0].display_name }}{% else %}-{% endif %}</p>
+    </article>
+  </div>
+</section>
+
+<section class="grid lg:grid-cols-3 gap-4 mb-5">
+  <article class="glass soft-shadow rounded-2xl p-4 lg:col-span-2">
+    <h2 class="title-font text-xl font-bold mb-3">Controles do sorteio</h2>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="/giveaways/{{ giveaway.id }}/start">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn-main">Abrir sorteio</button>
+      </form>
+      <form method="post" action="/giveaways/{{ giveaway.id }}/stop">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn-soft">Fechar sorteio</button>
+      </form>
+      <form method="post" action="/giveaways/{{ giveaway.id }}/clear">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn-soft">Limpar participantes</button>
+      </form>
+      <form method="post" action="/giveaways/{{ giveaway.id }}/draw">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button id="draw-button" class="btn-main" style="background: linear-gradient(120deg,#f59e0b,#f97316);">Sortear agora</button>
+      </form>
+      <form method="post" action="/giveaways/{{ giveaway.id }}/delete" onsubmit="return confirm('Tem certeza que deseja excluir este sorteio? Esta ação não pode ser desfeita.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn-soft" style="background:#dc2626;border-color:#dc2626;color:#ffffff;" title="Excluir sorteio">🗑️</button>
+      </form>
+      <a href="/giveaways/{{ giveaway.id }}/participants?format=csv" class="btn-soft">Exportar lista (CSV)</a>
+    </div>
+
+    <div class="mt-4 rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+      <div>
+        <p class="text-sm text-slate-600 mb-1">URL do overlay banner (ticker)</p>
+        <div class="flex flex-col md:flex-row gap-2">
+          <code id="overlay-url-banner" class="flex-1 text-xs md:text-sm break-all bg-slate-100 rounded p-2">{{ request.base_url }}overlay/{{ giveaway.id }}/banner?token={{ overlay_token }}</code>
+          <button class="btn-soft js-copy-overlay" data-copy-target="overlay-url-banner">Copiar URL</button>
+        </div>
+      </div>
+      <div>
+        <p class="text-sm text-slate-600 mb-1">URL do overlay roleta</p>
+        <div class="flex flex-col md:flex-row gap-2">
+          <code id="overlay-url-roulette" class="flex-1 text-xs md:text-sm break-all bg-slate-100 rounded p-2">{{ request.base_url }}overlay/{{ giveaway.id }}/roulette?token={{ overlay_token }}</code>
+          <button class="btn-soft js-copy-overlay" data-copy-target="overlay-url-roulette">Copiar URL</button>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <article class="glass soft-shadow rounded-2xl p-4">
+    <h2 class="title-font text-xl font-bold mb-2">Painel ao vivo</h2>
+    <p class="text-slate-600 text-sm">Quando novos participantes entram, o nome aparece aqui e depois volta para a mensagem padrão.</p>
+    <form method="post" action="/giveaways/{{ giveaway.id }}/ticker-message" class="mt-3 flex flex-col gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input
+        class="w-full border border-slate-200 rounded-xl p-2 text-sm"
+        name="ticker_message"
+        maxlength="255"
+        value="{{ giveaway.ticker_message if giveaway.ticker_message else '' }}"
+        placeholder="Ex.: Sorteio acontecendo até as 22h galera!"
+      >
+      <button class="btn-soft text-sm" type="submit">Salvar mensagem do ticker</button>
+    </form>
+    <div class="mt-3 rounded-xl bg-slate-900 text-white p-3 ticker">
+      <span id="ticker-name">{{ ticker_default }}</span>
+    </div>
+
+    <div class="mt-4">
+      <p class="text-sm text-slate-600 mb-2">Prévia da roleta</p>
+      <div class="rounded-xl border border-slate-200 bg-slate-950/20 overflow-hidden">
+        <iframe
+          id="roulette-preview-frame"
+          title="Previa da roleta"
+          src="/overlay/{{ giveaway.id }}/roulette?token={{ overlay_token }}&preview=1"
+          class="w-full h-72 bg-transparent"
+          loading="lazy"
+        ></iframe>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">A prévia usa a mesma roleta circular do overlay.</p>
+    </div>
+  </article>
+</section>
+
+<section class="grid md:grid-cols-2 gap-4">
+  <article class="glass soft-shadow rounded-2xl p-4">
+    <h2 class="title-font text-xl font-bold mb-3">Participantes recentes</h2>
+    <ul id="participants-list" class="space-y-1 max-h-80 overflow-auto pr-1">
+      {% for p in participants %}
+      <li class="text-sm border-b border-slate-100 pb-1">{{ p.display_name }} <span class="text-slate-500">({{ p.platform.value }})</span></li>
+      {% else %}
+      <li class="text-sm text-slate-600">Sem participantes ainda.</li>
+      {% endfor %}
+    </ul>
+  </article>
+
+  <article class="glass soft-shadow rounded-2xl p-4">
+    <h2 class="title-font text-xl font-bold mb-3">Histórico de vencedores</h2>
+    <ul id="winners-list" class="space-y-1 max-h-80 overflow-auto pr-1">
+      {% for w in winners %}
+      <li class="text-sm border-b border-slate-100 pb-1">{{ w.display_name }} <span class="text-slate-500">({{ w.platform.value }})</span></li>
+      {% else %}
+      <li class="text-sm text-slate-600">Nenhum vencedor ainda.</li>
+      {% endfor %}
+    </ul>
+    {% if winners_total > 10 %}
+    <div class="mt-3">
+      <a href="/giveaways/{{ giveaway.id }}/winners" class="btn-soft">Ver histórico completo</a>
+    </div>
+    {% endif %}
+  </article>
+</section>
+
+<script>
+  window.ROULETTE_GIVEAWAY_ID = {{ giveaway.id }};
+  window.ROULETTE_TICKER_DEFAULT = {{ ticker_default|tojson }};
+</script>
+{% endblock %}

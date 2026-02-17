@@ -1,0 +1,147 @@
+﻿<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token if csrf_token else '' }}">
+  <title>{{ title if title else 'LiveRoll' }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand-ink: #0f172a;
+      --brand-sky: #0ea5e9;
+      --brand-ocean: #2563eb;
+      --brand-mint: #14b8a6;
+      --brand-amber: #f59e0b;
+      --surface: #f7fafc;
+      --card: #ffffff;
+      --surface-text: #0f172a;
+      --surface-muted: #475569;
+      --surface-soft: #f1f5f9;
+      --surface-border: rgba(15, 23, 42, 0.12);
+      --glass-bg: rgba(255, 255, 255, 0.82);
+      --glass-border: rgba(15, 23, 42, 0.08);
+      --btn-soft-bg: #ffffff;
+      --btn-soft-text: #1e293b;
+    }
+
+    html[data-theme="dark"] {
+      --brand-ink: #e2e8f0;
+      --surface: #020617;
+      --card: #0f172a;
+      --surface-text: #e2e8f0;
+      --surface-muted: #94a3b8;
+      --surface-soft: #1e293b;
+      --surface-border: rgba(148, 163, 184, 0.25);
+      --glass-bg: rgba(15, 23, 42, 0.76);
+      --glass-border: rgba(148, 163, 184, 0.24);
+      --btn-soft-bg: #0b1223;
+      --btn-soft-text: #e2e8f0;
+    }
+
+    body {
+      font-family: 'Nunito Sans', sans-serif;
+      color: var(--surface-text);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(14, 165, 233, 0.20), transparent 30%),
+        radial-gradient(circle at 85% 15%, rgba(20, 184, 166, 0.18), transparent 26%),
+        radial-gradient(circle at 20% 90%, rgba(245, 158, 11, 0.16), transparent 30%),
+        var(--surface);
+      min-height: 100vh;
+      transition: background-color .2s ease, color .2s ease;
+    }
+
+    .title-font { font-family: 'Sora', sans-serif; }
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--glass-border);
+    }
+    .soft-shadow { box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08); }
+
+    .btn-main {
+      background: linear-gradient(120deg, var(--brand-ocean), var(--brand-sky));
+      color: #fff;
+      border-radius: 14px;
+      padding: .62rem 1rem;
+      font-weight: 700;
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .btn-main:hover { transform: translateY(-1px); filter: brightness(1.06); }
+
+    .btn-soft {
+      background: var(--btn-soft-bg);
+      color: var(--btn-soft-text);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: .55rem .9rem;
+      font-weight: 700;
+    }
+
+    .chip {
+      border-radius: 9999px;
+      font-size: .72rem;
+      font-weight: 800;
+      padding: .28rem .68rem;
+      letter-spacing: .03em;
+    }
+
+    .ticker {
+      overflow: hidden;
+      white-space: nowrap;
+      position: relative;
+    }
+    .ticker span {
+      display: inline-block;
+      padding-left: 100%;
+      animation: ticker 10s linear infinite;
+    }
+    @keyframes ticker {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+
+    .winner-flash {
+      animation: winnerFlash 900ms ease;
+    }
+    @keyframes winnerFlash {
+      0% { transform: scale(0.98); background: rgba(245, 158, 11, 0.12); }
+      60% { transform: scale(1.02); background: rgba(20, 184, 166, 0.16); }
+      100% { transform: scale(1); background: transparent; }
+    }
+
+    html[data-theme="dark"] .bg-white { background-color: var(--card) !important; }
+    html[data-theme="dark"] .bg-slate-50 { background-color: #0f172a !important; }
+    html[data-theme="dark"] .bg-slate-100 { background-color: var(--surface-soft) !important; }
+    html[data-theme="dark"] .bg-slate-900 { background-color: #020617 !important; }
+    html[data-theme="dark"] .border-slate-100,
+    html[data-theme="dark"] .border-slate-200 { border-color: var(--surface-border) !important; }
+    html[data-theme="dark"] .text-slate-500,
+    html[data-theme="dark"] .text-slate-600,
+    html[data-theme="dark"] .text-slate-700 { color: var(--surface-muted) !important; }
+    html[data-theme="dark"] input,
+    html[data-theme="dark"] textarea,
+    html[data-theme="dark"] select,
+    html[data-theme="dark"] code {
+      background-color: var(--surface-soft) !important;
+      color: var(--surface-text) !important;
+      border-color: var(--surface-border) !important;
+    }
+  </style>
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <main class="max-w-6xl mx-auto py-8 px-4">
+    <div class="flex items-center justify-between mb-4">
+      <a href="/dashboard" class="inline-flex items-center gap-2" aria-label="LiveRoll">
+        <img src="/static/liveroll-logo.svg" alt="LiveRoll" class="h-10 md:h-11 w-auto">
+      </a>
+      <button id="theme-toggle" class="btn-soft text-sm" type="button" aria-label="Alternar tema" title="Alternar tema">☀️</button>
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

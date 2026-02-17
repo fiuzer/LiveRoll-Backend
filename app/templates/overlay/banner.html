@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overlay Banner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --shell-a: rgba(15, 23, 42, 0.88);
+      --shell-b: rgba(30, 64, 175, 0.82);
+      --line: rgba(255, 255, 255, 0.2);
+    }
+    body {
+      margin: 0;
+      font-family: 'Sora', sans-serif;
+      background: transparent;
+      overflow: hidden;
+    }
+    .shell {
+      width: min(1500px, 98vw);
+      border-radius: 24px;
+      background: linear-gradient(120deg, var(--shell-a), var(--shell-b));
+      border: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+      color: #fff;
+      box-shadow: 0 22px 46px rgba(2, 6, 23, 0.4);
+      padding: 14px 16px;
+    }
+    .ticker {
+      overflow: hidden;
+      white-space: nowrap;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 8px 12px;
+    }
+    .ticker-text {
+      display: inline-block;
+      padding-left: 100%;
+      animation: ticker 11s linear infinite;
+      font-weight: 700;
+    }
+    @keyframes ticker {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+    .winner-pop { animation: pop .6s ease; }
+    @keyframes pop {
+      0% { transform: scale(.94); opacity: .7; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="w-full h-screen flex items-end justify-center p-4 md:p-8">
+    <section class="shell">
+      <header class="flex items-center justify-between gap-3 mb-3">
+        <h1 id="ov-name" class="text-lg md:text-2xl font-extrabold">Sorteio ao vivo</h1>
+        <div class="flex items-center gap-2">
+          <span id="ov-status" class="text-xs md:text-sm px-3 py-1 rounded-full bg-red-500">Fechado</span>
+          <span class="text-xs md:text-sm rounded-full px-3 py-1 bg-white/10">Comando: <strong id="ov-command">!participar</strong></span>
+        </div>
+      </header>
+
+      <div class="grid md:grid-cols-3 gap-3 mb-3">
+        <div class="rounded-xl bg-white/10 p-3">
+          <p class="text-[11px] uppercase tracking-wide opacity-80">Participantes</p>
+          <p id="ov-count" class="text-3xl md:text-4xl font-extrabold">0</p>
+        </div>
+        <div id="ov-winner-box" class="rounded-xl border border-amber-300/40 bg-amber-300/15 p-3 md:col-span-2">
+          <p class="text-[11px] uppercase tracking-wide opacity-80">Ultimo vencedor</p>
+          <p id="ov-winner" class="text-xl md:text-2xl font-extrabold">Aguardando sorteio...</p>
+        </div>
+      </div>
+
+      <div class="ticker">
+        <span id="ov-ticker" class="ticker-text">Aguardando novas entradas no sorteio...</span>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const giveawayId = {{ giveaway_id }};
+    const token = "{{ token }}";
+
+    const elTicker = document.getElementById('ov-ticker');
+    const elWinner = document.getElementById('ov-winner');
+    const elWinnerBox = document.getElementById('ov-winner-box');
+
+    let lastCount = 0;
+    let tickerDefault = 'Aguardando novas entradas no sorteio...';
+    let tickerTimer = null;
+    let winnerKey = null;
+
+    function setState(data) {
+      const name = data.name || 'Sorteio ao vivo';
+      const count = Number(data.participants_count || 0);
+      const command = data.command || '!participar';
+      const open = Boolean(data.is_open);
+
+      document.getElementById('ov-name').textContent = name;
+      document.getElementById('ov-count').textContent = String(count);
+      document.getElementById('ov-command').textContent = command;
+
+      const status = document.getElementById('ov-status');
+      status.textContent = open ? 'Aberto' : 'Fechado';
+      status.className = open
+        ? 'text-xs md:text-sm px-3 py-1 rounded-full bg-emerald-500'
+        : 'text-xs md:text-sm px-3 py-1 rounded-full bg-red-500';
+
+      tickerDefault = data.ticker_message && data.ticker_message.trim()
+        ? data.ticker_message.trim()
+        : `Sorteio ${name} rolando agora. Digite ${command}`;
+      if (count <= lastCount) {
+        if (!elTicker.textContent || elTicker.textContent.startsWith('Novo participante')) {
+          elTicker.textContent = tickerDefault;
+        }
+      } else {
+        const latestName = data.latest_participant || null;
+        if (latestName) {
+          elTicker.textContent = `Novo participante no chat: ${latestName}`;
+          if (tickerTimer) {
+            clearTimeout(tickerTimer);
+          }
+          tickerTimer = setTimeout(() => {
+            elTicker.textContent = tickerDefault;
+          }, 4500);
+        } else {
+          elTicker.textContent = tickerDefault;
+        }
+      }
+      lastCount = count;
+
+      const w = data.last_winner;
+      if (w && w.display_name) {
+        const key = `${w.display_name}|${w.platform}|${w.drawn_at || ''}`;
+        if (key !== winnerKey) {
+          winnerKey = key;
+          elWinner.textContent = `${w.display_name} (${w.platform})`;
+          elWinnerBox.classList.remove('winner-pop');
+          void elWinnerBox.offsetWidth;
+          elWinnerBox.classList.add('winner-pop');
+        }
+      }
+    }
+
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${scheme}://${location.host}/ws/overlay/banner/${giveawayId}?token=${encodeURIComponent(token)}`);
+    ws.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      const data = payload.type === 'state' ? payload.state : payload;
+      if (!data) return;
+      setState(data);
+    };
+  </script>
+</body>
+</html>

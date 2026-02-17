@@ -1,0 +1,95 @@
+﻿{% extends 'base.html' %}
+{% block content %}
+<section class="glass soft-shadow rounded-3xl p-5 md:p-7 mb-5">
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div>
+      <p class="chip bg-sky-100 text-sky-700 inline-block mb-2">PAINEL AO VIVO</p>
+      <h1 class="title-font text-3xl md:text-4xl font-extrabold">Sorteios em tempo real</h1>
+      <p class="text-slate-600 mt-1">Gerencie participantes da Twitch + YouTube sem sair do navegador.</p>
+    </div>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn-soft">Sair</button>
+    </form>
+  </div>
+</section>
+
+{% if oauth_error %}
+<div class="mb-4 rounded-xl border border-red-300 bg-red-50 text-red-700 p-3">{{ oauth_error }}</div>
+{% endif %}
+{% if create_error %}
+<div class="mb-4 rounded-xl border border-yellow-300 bg-yellow-50 text-yellow-800 p-3">{{ create_error }}</div>
+{% endif %}
+
+<section class="grid md:grid-cols-2 gap-4 mb-5">
+  <article class="glass soft-shadow rounded-2xl p-5">
+    <h2 class="title-font text-xl font-bold mb-3">Conexões</h2>
+    <div class="space-y-2">
+      {% if 'twitch' in connected %}
+      <div class="rounded-xl px-4 py-2.5 text-white" style="background:#9146FF;">
+        <div class="font-bold text-center">✅ Twitch conectado</div>
+        <form method="post" action="/oauth/twitch/disconnect" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="w-full rounded-lg bg-white/15 border border-white/30 py-1.5 font-bold text-sm hover:bg-white/20">Desconectar Twitch</button>
+        </form>
+      </div>
+      {% else %}
+      <a class="block text-center rounded-xl px-4 py-2.5 font-bold text-white" style="background:#9146FF;" href="/oauth/twitch/connect">Conectar Twitch</a>
+      {% endif %}
+
+      {% if 'google' in connected %}
+      <div class="rounded-xl px-4 py-2.5 text-white" style="background:#FF0000;">
+        <div class="font-bold text-center">✅ YouTube conectado</div>
+        <form method="post" action="/oauth/google/disconnect" class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="w-full rounded-lg bg-white/15 border border-white/30 py-1.5 font-bold text-sm hover:bg-white/20">Desconectar YouTube</button>
+        </form>
+      </div>
+      {% else %}
+      <a class="block text-center rounded-xl px-4 py-2.5 font-bold text-white" style="background:#FF0000;" href="/oauth/google/connect">Conectar YouTube</a>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="glass soft-shadow rounded-2xl p-5">
+    <h2 class="title-font text-xl font-bold mb-3">Novo sorteio</h2>
+    <form method="post" action="/giveaways/create" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input class="w-full border border-slate-200 rounded-xl p-2.5" name="name" placeholder="Nome do sorteio" required>
+      <input class="w-full border border-slate-200 rounded-xl p-2.5" name="command" value="{{ default_command }}" required>
+      <input class="w-full border border-slate-200 rounded-xl p-2.5" name="youtube_video_id" placeholder="URL da live YouTube (opcional)">
+      <input class="w-full border border-slate-200 rounded-xl p-2.5" name="ticker_message" placeholder="Mensagem inicial do ticker (opcional)">
+      <button class="btn-main w-full">Criar sorteio</button>
+    </form>
+  </article>
+</section>
+
+<section class="glass soft-shadow rounded-2xl p-5">
+  <h2 class="title-font text-xl font-bold mb-3">Meus sorteios</h2>
+  <div class="space-y-2">
+    {% for g in giveaways %}
+      <div class="rounded-xl border border-slate-200 p-3 bg-white">
+        <div class="flex items-center justify-between gap-3">
+          <a href="/giveaways/{{ g.id }}" class="flex-1 hover:bg-slate-50 rounded p-1 transition">
+            <div class="font-bold text-lg">{{ g.name }}</div>
+            <div class="text-sm text-slate-600">Comando: {{ g.command }}</div>
+          </a>
+          <div class="flex items-center gap-2">
+            {% if g.is_open %}
+            <span class="chip bg-emerald-100 text-emerald-700">ABERTO</span>
+            {% else %}
+            <span class="chip bg-slate-200 text-slate-700">FECHADO</span>
+            {% endif %}
+            <form method="post" action="/giveaways/{{ g.id }}/delete" onsubmit="return confirm('Tem certeza que deseja excluir este sorteio?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn-soft" style="background:#dc2626;border-color:#dc2626;color:#ffffff;" title="Excluir sorteio">🗑️</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-slate-600">Nenhum sorteio criado ainda.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
