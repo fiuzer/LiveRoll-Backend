@@ -1,11 +1,10 @@
-﻿import asyncio
+import asyncio
 import json
 import logging
-import random
 from contextlib import suppress
-from datetime import datetime
 
 import httpx
+import websockets
 from redis.asyncio import Redis
 from sqlalchemy import select
 
@@ -15,7 +14,7 @@ from app.db.session import AsyncSessionLocal
 from app.models import Giveaway, OAuthProvider, Platform
 from app.services.audit import add_audit_log
 from app.services.giveaway_service import add_or_refresh_participant, normalize_command
-from app.services.oauth_service import decrypt_access_token, get_oauth_account, get_google_live_chat_id
+from app.services.oauth_service import decrypt_access_token, get_google_live_chat_id, get_oauth_account
 from app.services.realtime import build_giveaway_state, publish_state
 
 logger = logging.getLogger(__name__)
@@ -75,39 +74,37 @@ class GiveawayRunner:
                     await asyncio.sleep(10)
                     continue
 
-                reader, writer = await asyncio.open_connection('irc.chat.twitch.tv', 6667)
-                writer.write(b'CAP REQ :twitch.tv/tags twitch.tv/commands\r\n')
-                writer.write(f'PASS oauth:{token}\r\n'.encode())
-                writer.write(f'NICK {channel_login}\r\n'.encode())
-                writer.write(f'JOIN #{channel_login}\r\n'.encode())
-                await writer.drain()
-
                 cmd = normalize_command(giveaway.command)
-                while not self.stop_event.is_set():
-                    line = await asyncio.wait_for(reader.readline(), timeout=120)
-                    if not line:
-                        raise ConnectionError('empty irc line')
-                    message = line.decode(errors='ignore').strip()
-                    if message.startswith('PING'):
-                        writer.write(message.replace('PING', 'PONG', 1).encode() + b'\r\n')
-                        await writer.drain()
-                        continue
-                    parsed = self._parse_twitch_privmsg(message)
-                    if not parsed:
-                        continue
-                    if parsed['text'].strip().lower() == cmd:
-                        await self._register_participant(
-                            platform=Platform.TWITCH,
-                            platform_user_id=parsed['user_id'],
-                            display_name=parsed['display_name'],
-                        )
-                writer.close()
-                await writer.wait_closed()
+                await self._consume_twitch_ws(token, channel_login, cmd)
                 backoff = 1
             except Exception as exc:
                 logger.warning('Twitch runner error giveaway=%s error=%s', self.giveaway_id, exc)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
+
+    async def _consume_twitch_ws(self, token: str, channel_login: str, cmd: str) -> None:
+        ws_url = 'wss://irc-ws.chat.twitch.tv:443'
+        async with websockets.connect(ws_url, open_timeout=20, ping_interval=30, ping_timeout=30) as ws:
+            await ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
+            await ws.send(f'PASS oauth:{token}')
+            await ws.send(f'NICK {channel_login}')
+            await ws.send(f'JOIN #{channel_login}')
+
+            while not self.stop_event.is_set():
+                raw = await asyncio.wait_for(ws.recv(), timeout=120)
+                message = raw.decode(errors='ignore').strip() if isinstance(raw, bytes) else str(raw).strip()
+                if message.startswith('PING'):
+                    await ws.send(message.replace('PING', 'PONG', 1))
+                    continue
+                parsed = self._parse_twitch_privmsg(message)
+                if not parsed:
+                    continue
+                if parsed['text'].strip().lower() == cmd:
+                    await self._register_participant(
+                        platform=Platform.TWITCH,
+                        platform_user_id=parsed['user_id'],
+                        display_name=parsed['display_name'],
+                    )
 
     async def _fetch_twitch_login(self, token: str) -> str | None:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -142,7 +139,11 @@ class GiveawayRunner:
             if len(parts) != 2:
                 return None
             text = parts[1]
-            return {'user_id': user_id or display_name or 'unknown', 'display_name': display_name or 'twitch-user', 'text': text}
+            return {
+                'user_id': user_id or display_name or 'unknown',
+                'display_name': display_name or 'twitch-user',
+                'text': text,
+            }
         except Exception:
             return None
 
