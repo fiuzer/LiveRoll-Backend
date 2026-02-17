@@ -1,4 +1,5 @@
-﻿import secrets
+import secrets
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse
@@ -16,6 +17,7 @@ from app.services.auth_service import (
     user_exists,
 )
 from app.services.social_auth_service import (
+    SocialAuthError,
     github_auth_authorize_url,
     github_auth_exchange_code,
     google_auth_authorize_url,
@@ -31,7 +33,10 @@ async def register_page(request: Request):
         return RedirectResponse('/dashboard', status_code=status.HTTP_302_FOUND)
     csrf = request.session.get('csrf_token') or generate_csrf_token()
     request.session['csrf_token'] = csrf
-    response = request.app.state.templates.TemplateResponse('auth/register.html', {'request': request, 'csrf_token': csrf})
+    response = request.app.state.templates.TemplateResponse(
+        'auth/register.html',
+        {'request': request, 'csrf_token': csrf},
+    )
     response.set_cookie('csrf_token', csrf, secure=False, httponly=False, samesite='lax')
     return response
 
@@ -66,7 +71,11 @@ async def login_page(request: Request):
         return RedirectResponse('/dashboard', status_code=status.HTTP_302_FOUND)
     csrf = request.session.get('csrf_token') or generate_csrf_token()
     request.session['csrf_token'] = csrf
-    response = request.app.state.templates.TemplateResponse('auth/login.html', {'request': request, 'csrf_token': csrf})
+    oauth_error = request.query_params.get('oauth_error')
+    response = request.app.state.templates.TemplateResponse(
+        'auth/login.html',
+        {'request': request, 'csrf_token': csrf, 'error': oauth_error},
+    )
     response.set_cookie('csrf_token', csrf, secure=False, httponly=False, samesite='lax')
     return response
 
@@ -111,7 +120,13 @@ async def google_auth_callback(
     if request.session.get('oauth_state_google_auth') != state:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='OAuth state inválido')
 
-    data = await google_auth_exchange_code(code)
+    try:
+        data = await google_auth_exchange_code(code)
+    except SocialAuthError as exc:
+        return RedirectResponse(
+            f'/login?oauth_error={quote(exc.user_message)}',
+            status_code=status.HTTP_302_FOUND,
+        )
     email = data.get('email')
     if not email:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Conta Google sem e-mail')
@@ -148,7 +163,13 @@ async def github_auth_callback(
     if request.session.get('oauth_state_github_auth') != state:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='OAuth state inválido')
 
-    data = await github_auth_exchange_code(code)
+    try:
+        data = await github_auth_exchange_code(code)
+    except SocialAuthError as exc:
+        return RedirectResponse(
+            f'/login?oauth_error={quote(exc.user_message)}',
+            status_code=status.HTTP_302_FOUND,
+        )
     email = data.get('email')
     if not email:
         raise HTTPException(
