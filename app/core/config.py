@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     database_url: str = 'sqlite+aiosqlite:///./dev.db'
     sync_database_url: str = 'sqlite:///./dev.db'
     redis_url: str = 'redis://localhost:6379/0'
+    db_pool_size: int = 5
+    db_max_overflow: int = 5
+    db_pool_timeout_seconds: int = 30
+    db_pool_recycle_seconds: int = 1800
 
     session_cookie_name: str = 'roleta_session'
     session_max_age_seconds: int = 60 * 60 * 24 * 7
@@ -36,6 +40,7 @@ class Settings(BaseSettings):
     cors_origins: str = 'http://localhost:8000'
     public_frontend_url: str = 'http://localhost:5173'
     overlay_token_ttl_seconds: int = 60 * 60 * 24 * 365
+    run_embedded_worker: bool = False
 
     default_command: str = '!participar'
     youtube_polling_floor_seconds: float = 2.0

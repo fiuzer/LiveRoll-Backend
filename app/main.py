@@ -1,11 +1,14 @@
-﻿from fastapi import FastAPI, Request
+import asyncio
+from contextlib import suppress
+from datetime import timezone
+from zoneinfo import ZoneInfo
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from datetime import timezone
-from zoneinfo import ZoneInfo
 
 from app.api import auth, client, dashboard, oauth, ops, realtime
 from app.core.config import get_settings
@@ -13,7 +16,7 @@ from app.core.logging import configure_logging
 from app.core.security import parse_overlay_token
 from app.db.session import AsyncSessionLocal
 from app.models import Giveaway
-
+from app.workers.chat_worker import worker_loop
 
 BRAZIL_TZ = ZoneInfo('America/Sao_Paulo')
 
@@ -69,6 +72,7 @@ def create_app() -> FastAPI:
     templates.env.filters['br_datetime'] = format_brt_datetime
     templates.env.globals['public_frontend_url'] = settings.public_frontend_url
     app.state.templates = templates
+    app.state.embedded_worker_task = None
 
     async def overlay_loader(giveaway_id: int, token: str):
         parsed = parse_overlay_token(token)
@@ -79,6 +83,20 @@ def create_app() -> FastAPI:
             return giveaway
 
     app.state.overlay_loader = overlay_loader
+
+    @app.on_event('startup')
+    async def startup_embedded_worker():
+        if settings.run_embedded_worker:
+            app.state.embedded_worker_task = asyncio.create_task(worker_loop())
+
+    @app.on_event('shutdown')
+    async def shutdown_embedded_worker():
+        task = app.state.embedded_worker_task
+        if task is None:
+            return
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
     app.include_router(auth.router)
     app.include_router(client.router)

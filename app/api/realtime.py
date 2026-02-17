@@ -4,10 +4,9 @@ from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from redis.asyncio import Redis
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.redis_client import get_redis
-from app.db.session import get_db_session
+from app.db.session import AsyncSessionLocal
 from app.models import Giveaway
 from app.services.realtime import EVENT_CHANNEL, build_giveaway_state
 
@@ -18,7 +17,6 @@ router = APIRouter()
 async def giveaway_ws(
     websocket: WebSocket,
     giveaway_id: int,
-    db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
 ):
     await websocket.accept()
@@ -28,12 +26,12 @@ async def giveaway_ws(
         await websocket.close(code=4401)
         return
 
-    owned = await db.execute(select(Giveaway).where(Giveaway.id == giveaway_id, Giveaway.user_id == int(user_id)))
-    if owned.scalar_one_or_none() is None:
-        await websocket.close(code=4404)
-        return
-
-    state = await build_giveaway_state(db, giveaway_id)
+    async with AsyncSessionLocal() as db:
+        owned = await db.execute(select(Giveaway).where(Giveaway.id == giveaway_id, Giveaway.user_id == int(user_id)))
+        if owned.scalar_one_or_none() is None:
+            await websocket.close(code=4404)
+            return
+        state = await build_giveaway_state(db, giveaway_id)
     if state:
         await websocket.send_json({'type': 'state', 'state': state})
 
@@ -98,7 +96,6 @@ async def _overlay_ws_stream(
     websocket: WebSocket,
     giveaway_id: int,
     token: str,
-    db: AsyncSession,
     redis: Redis,
 ):
     giveaway = await websocket.app.state.overlay_loader(giveaway_id, token)
@@ -107,7 +104,8 @@ async def _overlay_ws_stream(
         return
 
     await websocket.accept()
-    state = await build_giveaway_state(db, giveaway_id)
+    async with AsyncSessionLocal() as db:
+        state = await build_giveaway_state(db, giveaway_id)
     if state:
         await websocket.send_json({'type': 'state', 'state': state})
 
@@ -148,10 +146,9 @@ async def overlay_ws_legacy(
     websocket: WebSocket,
     giveaway_id: int,
     token: str,
-    db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
 ):
-    await _overlay_ws_stream(websocket, giveaway_id, token, db, redis)
+    await _overlay_ws_stream(websocket, giveaway_id, token, redis)
 
 
 @router.websocket('/ws/overlay/banner/{giveaway_id}')
@@ -159,10 +156,9 @@ async def overlay_ws_banner(
     websocket: WebSocket,
     giveaway_id: int,
     token: str,
-    db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
 ):
-    await _overlay_ws_stream(websocket, giveaway_id, token, db, redis)
+    await _overlay_ws_stream(websocket, giveaway_id, token, redis)
 
 
 @router.websocket('/ws/overlay/roulette/{giveaway_id}')
@@ -170,7 +166,6 @@ async def overlay_ws_roulette(
     websocket: WebSocket,
     giveaway_id: int,
     token: str,
-    db: AsyncSession = Depends(get_db_session),
     redis: Redis = Depends(get_redis),
 ):
-    await _overlay_ws_stream(websocket, giveaway_id, token, db, redis)
+    await _overlay_ws_stream(websocket, giveaway_id, token, redis)
